@@ -5,18 +5,19 @@ export async function GET(request: Request) {
   const teamId = searchParams.get('teamId') || '147'; // 147 is NYY
   
   try {
-    const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&season=2024&teamId=${teamId}`);
+    const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&season=2022,2023,2024,2025,2026&teamId=${teamId}&gameType=R`);
     if (!res.ok) throw new Error('Stats API fetch failed');
     const data = await res.json();
     
     let price = 1000;
-    const timeSeries = [];
+    const timeSeries: any[] = [];
     
     let lastTime = 0;
 
     for (const date of data.dates || []) {
       for (const game of date.games || []) {
-        if (game.status.statusCode === 'F' && game.teams.away.score !== undefined && game.teams.home.score !== undefined) {
+        const isLiveOrFinished = ['F', 'O', 'I', 'IR'].includes(game.status.statusCode);
+        if (isLiveOrFinished && game.teams.away.score !== undefined && game.teams.home.score !== undefined) {
           const isHome = game.teams.home.team.id.toString() === teamId;
           const runsFor = isHome ? game.teams.home.score : game.teams.away.score;
           const runsAgainst = isHome ? game.teams.away.score : game.teams.home.score;

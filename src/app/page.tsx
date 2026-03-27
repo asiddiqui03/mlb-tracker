@@ -102,8 +102,13 @@ function TeamChart({ team, fangraphsData, onOpenSearch }: { team: string, fangra
       emaSeriesRef.current = emaSeries;
       vwapSeriesRef.current = vwapSeries;
 
-      const handleResize = () => chart.applyOptions({ width: chartContainerRef.current?.clientWidth, height: chartContainerRef.current?.clientHeight });
-      window.addEventListener('resize', handleResize);
+      const handleResize = () => {
+        if (chartContainerRef.current) {
+            chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
+        }
+      };
+      const resizeObserver = new ResizeObserver(() => handleResize());
+      resizeObserver.observe(chartContainerRef.current);
 
       chart.subscribeCrosshairMove((param) => {
         if (param.time && param.seriesData.get(candleSeries)) {
@@ -113,7 +118,7 @@ function TeamChart({ team, fangraphsData, onOpenSearch }: { team: string, fangra
         }
       });
 
-      return () => { window.removeEventListener('resize', handleResize); chart.remove(); chartRef.current = null; };
+      return () => { resizeObserver.disconnect(); chart.remove(); chartRef.current = null; };
     }
   }, []);
 
@@ -160,6 +165,9 @@ function TeamChart({ team, fangraphsData, onOpenSearch }: { team: string, fangra
     else if (activeRange === '1Day') FROM = TO - SECONDS_PER_DAY;
     else if (activeRange === '1Week') FROM = TO - 7 * SECONDS_PER_DAY;
     else if (activeRange === '1Month') FROM = TO - 30 * SECONDS_PER_DAY;
+
+    // Safety check for Opening Day single-game scenarios where FROM === TO
+    if (FROM >= TO) FROM = TO - SECONDS_PER_DAY;
     
     timeScale.setVisibleRange({ from: FROM as Time, to: TO as Time });
   }, [activeRange, scheduleData]);
@@ -224,6 +232,24 @@ export default function Home() {
   
   const [modalOpenFor, setModalOpenFor] = useState<'primary' | 'compare' | null>(null);
 
+  const [splitPercent, setSplitPercent] = useState(50);
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => { isDragging.current = false; };
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newPercent = (e.clientX / window.innerWidth) * 100;
+      if (newPercent > 10 && newPercent < 90) setSplitPercent(newPercent);
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
   useEffect(() => setMounted(true), []);
   
   useEffect(() => {
@@ -260,9 +286,27 @@ export default function Home() {
       </div>
 
       <div className="main-area">
-        <div className="charts-container">
-          <TeamChart team={team1} fangraphsData={fangraphsData} onOpenSearch={() => setModalOpenFor('primary')} />
-          {compareTeam !== 'None' && <TeamChart team={compareTeam} fangraphsData={fangraphsData} onOpenSearch={() => setModalOpenFor('compare')} />}
+        <div className="charts-container" style={{ flexDirection: 'row' }}>
+          {compareTeam !== 'None' ? (
+             <>
+               <div style={{ width: `${splitPercent}%`, minWidth: 0, position: 'relative', display: 'flex' }}>
+                 <TeamChart team={team1} fangraphsData={fangraphsData} onOpenSearch={() => setModalOpenFor('primary')} />
+               </div>
+               <div 
+                 onMouseDown={() => { isDragging.current = true; }} 
+                 style={{ width: '4px', background: '#2B3139', cursor: 'col-resize', zIndex: 50, transition: 'background 0.2s' }} 
+                 onMouseEnter={e => (e.currentTarget.style.background = '#2962FF')}
+                 onMouseLeave={e => (e.currentTarget.style.background = '#2B3139')}
+               />
+               <div style={{ width: `${100 - splitPercent}%`, minWidth: 0, position: 'relative', display: 'flex' }}>
+                 <TeamChart team={compareTeam} fangraphsData={fangraphsData} onOpenSearch={() => setModalOpenFor('compare')} />
+               </div>
+             </>
+          ) : (
+             <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex' }}>
+               <TeamChart team={team1} fangraphsData={fangraphsData} onOpenSearch={() => setModalOpenFor('primary')} />
+             </div>
+          )}
         </div>
       </div>
 

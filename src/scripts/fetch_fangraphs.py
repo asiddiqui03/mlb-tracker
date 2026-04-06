@@ -1,8 +1,11 @@
 import json
-from pybaseball import team_batting
+from pybaseball import team_batting, cache
 
 def main():
     try:
+        # Enable pybaseball caching to avoid repeated ~1 minute network calls
+        cache.enable()
+        
         # Fetch only the current/latest complete season (2024) to avoid timeouts
         data = team_batting(2024)
         data = data.fillna(0)
